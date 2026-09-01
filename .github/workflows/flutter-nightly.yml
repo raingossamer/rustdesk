@@ -1,10 +1,20 @@
 name: Flutter Nightly Build
 
 on:
-  schedule:
-    # schedule build every night
-    - cron: "0 0 * * *"
+  # Run once for every push to master (no more cron schedule).
+  push:
+    branches:
+      - master
+    paths-ignore:
+      - "docs/**"
+      - "README.md"
   workflow_dispatch:
+
+# Only one run per branch at a time: a newer push to master cancels the
+# still-running build of the previous commit, so we never queue up duplicates.
+concurrency:
+  group: flutter-nightly-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   run-flutter-nightly-build:

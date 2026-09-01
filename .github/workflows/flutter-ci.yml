@@ -6,16 +6,8 @@ on:
     paths-ignore:
     - "docs/**"
     - "README.md"
-  push:
-    branches:
-      - master
-    paths-ignore:
-      - ".github/**"
-      - "docs/**"
-      - "README.md"
-      - "res/**"
-      - "appimage/**"
-      - "flatpak/**"
+  # push to master is handled by flutter-nightly.yml (build + package + release),
+  # so it is not duplicated here.
 
 jobs:
   run-ci:

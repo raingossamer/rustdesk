@@ -286,8 +286,8 @@ jobs:
   build-for-windows-sciter:
     name: ${{ matrix.job.target }} (${{ matrix.job.os }})
     runs-on: ${{ matrix.job.os }}
-    # Temporarily disable this action due to additional test is needed.
-    # if: false
+    # Disabled: only keep one stable job per platform (Windows -> build-for-windows-flutter x86_64).
+    if: false
     strategy:
       fail-fast: false
       matrix:
@@ -512,7 +512,7 @@ jobs:
           - {
               arch: aarch64,
               target: aarch64-apple-ios,
-              os: macos-13,
+              os: macos-latest, # macos-13 runners were retired by GitHub
               vcpkg-triplet: arm64-ios,
             }
     steps:
@@ -603,21 +603,41 @@ jobs:
           # for easy debugging
           flutter build ipa --release --no-codesign
 
-      # - name: Upload Artifacts
-      #   # if: env.ANDROID_SIGNING_KEY != null && env.UPLOAD_ARTIFACT == 'true'
-      #   uses: actions/upload-artifact@master
-      #   with:
-      #     name: rustdesk-${{ env.VERSION }}-${{ matrix.job.arch }}.apk
-      #     path: flutter/build/ios/ipa/*.ipa
+      # `--no-codesign` only produces an .xcarchive (no .ipa export without a
+      # signing identity), so wrap the .app into an unsigned .ipa by hand.
+      # It must be re-signed (AltStore / Sideloadly / TrollStore, etc.) before install.
+      - name: Package unsigned ipa
+        if: env.UPLOAD_ARTIFACT == 'true'
+        shell: bash
+        run: |
+          set -e
+          APP=$(find flutter/build/ios/archive -type d -name "*.app" -path "*/Products/Applications/*" | head -n 1)
+          if [[ -z "$APP" ]]; then
+            echo "No .app found under flutter/build/ios/archive"; ls -R flutter/build/ios | head -n 50; exit 1
+          fi
+          echo "Packaging $APP"
+          rm -rf ipa && mkdir -p ipa/Payload
+          cp -R "$APP" ipa/Payload/
+          pushd ipa
+          zip -qry ../rustdesk-${{ env.VERSION }}-${{ matrix.job.arch }}.ipa Payload
+          popd
+          ls -lh rustdesk-*.ipa
 
-      # - name: Publish ipa package
-      #   # if: env.ANDROID_SIGNING_KEY != null && env.UPLOAD_ARTIFACT == 'true'
-      #   uses: softprops/action-gh-release@v1
-      #   with:
-      #     prerelease: true
-      #     tag_name: ${{ env.TAG_NAME }}
-      #     files: |
-      #       flutter/build/ios/ipa/*.ipa
+      - name: Upload ipa Artifacts
+        if: env.UPLOAD_ARTIFACT == 'true'
+        uses: actions/upload-artifact@master
+        with:
+          name: rustdesk-${{ env.VERSION }}-${{ matrix.job.arch }}.ipa
+          path: rustdesk-${{ env.VERSION }}-${{ matrix.job.arch }}.ipa
+
+      - name: Publish ipa package
+        if: env.UPLOAD_ARTIFACT == 'true'
+        uses: softprops/action-gh-release@v1
+        with:
+          prerelease: true
+          tag_name: ${{ env.TAG_NAME }}
+          files: |
+            rustdesk-${{ env.VERSION }}-${{ matrix.job.arch }}.ipa
 
   build-rustdesk-ios-selfhost:
     #if: ${{ inputs.upload-artifact }}
@@ -685,13 +705,14 @@ jobs:
       fail-fast: false
       matrix:
         job:
-          - {
-              target: x86_64-apple-darwin,
-              os: macos-13, #macos-latest or macos-14 use M1 now, https://docs.github.com/en/actions/using-github-hosted-runners/about-github-hosted-runners/about-github-hosted-runners#:~:text=14%20GB-,macos%2Dlatest%20or%20macos%2D14,-The%20macos%2Dlatestlabel
-              extra-build-args: "",
-              arch: x86_64,
-              vcpkg-triplet: x64-osx,
-            }
+          # Disabled: only keep one stable job per platform (macOS -> aarch64). macos-13 runners were retired by GitHub.
+          # - {
+          #     target: x86_64-apple-darwin,
+          #     os: macos-13,
+          #     extra-build-args: "",
+          #     arch: x86_64,
+          #     vcpkg-triplet: x64-osx,
+          #   }
           - {
               target: aarch64-apple-darwin,
               os: macos-latest,
@@ -889,7 +910,8 @@ jobs:
       - build-for-macOS
       - build-for-windows-flutter
     runs-on: ubuntu-latest
-    if: ${{ inputs.upload-artifact }}
+    # Disabled: requires the macOS x86_64 artifact, which is no longer built.
+    if: false
     steps:
       - name: Download artifacts
         uses: actions/download-artifact@master
@@ -935,20 +957,21 @@ jobs:
               reltype: release,
               suffix: "",
             }
-          - {
-              arch: armv7,
-              target: armv7-linux-androideabi,
-              os: ubuntu-24.04,
-              reltype: release,
-              suffix: "",
-            }
-          - {
-              arch: x86_64,
-              target: x86_64-linux-android,
-              os: ubuntu-24.04,
-              reltype: release,
-              suffix: "",
-            }
+          # Disabled: only keep one stable job per platform (Android -> aarch64).
+          # - {
+          #     arch: armv7,
+          #     target: armv7-linux-androideabi,
+          #     os: ubuntu-24.04,
+          #     reltype: release,
+          #     suffix: "",
+          #   }
+          # - {
+          #     arch: x86_64,
+          #     target: x86_64-linux-android,
+          #     os: ubuntu-24.04,
+          #     reltype: release,
+          #     suffix: "",
+          #   }
     steps:
       - name: Free Disk Space (Ubuntu)
         uses: jlumbroso/free-disk-space@main
@@ -1213,7 +1236,8 @@ jobs:
   build-rustdesk-android-universal:
     needs: [build-rustdesk-android]
     name: build rustdesk android universal apk
-    if: ${{ inputs.upload-artifact }}
+    # Disabled: requires aarch64 + armv7 + x86_64 apks, only aarch64 is built now.
+    if: false
     runs-on: ubuntu-24.04
     env:
       reltype: release
@@ -1409,14 +1433,15 @@ jobs:
               deb_arch: amd64,
               vcpkg-triplet: x64-linux,
             }
-          - {
-              arch: aarch64,
-              target: aarch64-unknown-linux-gnu,
-              distro: ubuntu18.04,
-              on: ubuntu-22.04-arm,
-              deb_arch: arm64,
-              vcpkg-triplet: arm64-linux,
-            }
+          # Disabled: only keep one stable job per platform (Linux -> x86_64).
+          # - {
+          #     arch: aarch64,
+          #     target: aarch64-unknown-linux-gnu,
+          #     distro: ubuntu18.04,
+          #     on: ubuntu-22.04-arm,
+          #     deb_arch: arm64,
+          #     vcpkg-triplet: arm64-linux,
+          #   }
     steps:
       - name: Export GitHub Actions cache environment variables
         uses: actions/github-script@v6
@@ -1654,36 +1679,9 @@ jobs:
             for name in rustdesk*??.deb; do
               mv "$name" "${name%%.deb}-${{ matrix.job.arch }}.deb"
             done
+            # rpm (fedora / suse) packaging removed: only the .deb is published for Linux.
 
-            # rpm package
-            echo -e "start packaging fedora package"
-            pushd /workspace
-            case ${{ matrix.job.arch }} in
-              aarch64)
-                sed -i "s/linux\/x64/linux\/arm64/g" ./res/rpm-flutter.spec
-                ;;
-            esac
-            HBB=`pwd` rpmbuild ./res/rpm-flutter.spec -bb
-            pushd ~/rpmbuild/RPMS/${{ matrix.job.arch }}
-            for name in rustdesk*??.rpm; do
-                mv "$name" /workspace/"${name%%.rpm}.rpm"
-            done
-
-            # rpm suse package
-            echo -e "start packaging suse package"
-            pushd /workspace
-            case ${{ matrix.job.arch }} in
-              aarch64)
-                sed -i "s/linux\/x64/linux\/arm64/g" ./res/rpm-flutter-suse.spec
-                ;;
-            esac
-            HBB=`pwd` rpmbuild ./res/rpm-flutter-suse.spec -bb
-            pushd ~/rpmbuild/RPMS/${{ matrix.job.arch }}
-            for name in rustdesk*??.rpm; do
-                mv "$name" /workspace/"${name%%.rpm}-suse.rpm"
-            done
-
-      - name: Publish debian/rpm package
+      - name: Publish debian package
         if: env.UPLOAD_ARTIFACT == 'true'
         uses: softprops/action-gh-release@v1
         with:
@@ -1691,7 +1689,6 @@ jobs:
           tag_name: ${{ env.TAG_NAME }}
           files: |
             rustdesk-*.deb
-            rustdesk-*.rpm
 
       - name: Upload deb
         uses: actions/upload-artifact@master
@@ -1704,7 +1701,8 @@ jobs:
       # old arch image does not make sense for arch since it is "arch" which always update to date
       # and failed to makepkg arm64 on x86_64
       - name: Patch archlinux PKGBUILD
-        if: matrix.job.arch == 'x86_64' && env.UPLOAD_ARTIFACT == 'true'
+        # Disabled: only the .deb is published for Linux.
+        if: false
         run: |
           sed -i "s/x86_64/${{ matrix.job.arch }}/g" res/PKGBUILD
           if [[ "${{ matrix.job.arch }}" == "aarch64" ]]; then
@@ -1712,7 +1710,8 @@ jobs:
           fi
 
       - name: Build archlinux package
-        if: matrix.job.arch == 'x86_64' && env.UPLOAD_ARTIFACT == 'true'
+        # Disabled: only the .deb is published for Linux.
+        if: false
         uses: rustdesk-org/arch-makepkg-action@master
         with:
           packages:
@@ -1720,7 +1719,8 @@ jobs:
             cd res && HBB=`pwd`/.. FLUTTER=1 makepkg -f
 
       - name: Publish archlinux package
-        if: matrix.job.arch == 'x86_64' && env.UPLOAD_ARTIFACT == 'true'
+        # Disabled: only the .deb is published for Linux.
+        if: false
         uses: softprops/action-gh-release@v1
         with:
           prerelease: true
@@ -1729,7 +1729,8 @@ jobs:
             res/rustdesk-${{ env.VERSION }}*.zst
 
   build-rustdesk-linux-sciter:
-    if: ${{ inputs.upload-artifact }}
+    # Disabled: only keep one stable job per platform (Linux -> build-rustdesk-linux x86_64).
+    if: false
     runs-on: ${{ matrix.job.on }}
     name: build-rustdesk-linux-sciter ${{ matrix.job.target }}
     strategy:
@@ -1949,7 +1950,8 @@ jobs:
     name: Build appimage ${{ matrix.job.target }}
     needs: [build-rustdesk-linux]
     runs-on: ubuntu-22.04
-    if: ${{ inputs.upload-artifact }}
+    # Disabled: only keep one stable job per platform (Linux -> build-rustdesk-linux x86_64).
+    if: false
     strategy:
       fail-fast: false
       matrix:
@@ -2004,7 +2006,8 @@ jobs:
       - build-rustdesk-linux
       - build-rustdesk-linux-sciter
     runs-on: ${{ matrix.job.on }}
-    if: ${{ inputs.upload-artifact }}
+    # Disabled: only keep one stable job per platform (Linux -> build-rustdesk-linux x86_64).
+    if: false
     strategy:
       fail-fast: false
       matrix:
