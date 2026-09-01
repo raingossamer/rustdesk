@@ -144,6 +144,15 @@ jobs:
           vcpkgGitCommitId: ${{ env.VCPKG_COMMIT_ID }}
           doNotCache: false
 
+      - name: Patch vcpkg msys2 package list
+        # The msys2 packages pinned by vcpkg ${{ env.VCPKG_COMMIT_ID }} are gone from the
+        # msys2 mirrors (404) -> aom/ffmpeg/... fail in vcpkg_fixup_pkgconfig on Windows.
+        # Swap in the refreshed helper script (see .github/patches/vcpkg_acquire_msys.cmake).
+        shell: bash
+        run: |
+          cp -f .github/patches/vcpkg_acquire_msys.cmake "$VCPKG_ROOT/scripts/cmake/vcpkg_acquire_msys.cmake"
+          grep -c "z_vcpkg_acquire_msys_declare_package" "$VCPKG_ROOT/scripts/cmake/vcpkg_acquire_msys.cmake"
+
       - name: Install vcpkg dependencies
         env:
           VCPKG_DEFAULT_HOST_TRIPLET: ${{ matrix.job.vcpkg-triplet }}
@@ -336,6 +345,15 @@ jobs:
           vcpkgDirectory: C:\vcpkg
           vcpkgGitCommitId: ${{ env.VCPKG_COMMIT_ID }}
           doNotCache: false
+
+      - name: Patch vcpkg msys2 package list
+        # The msys2 packages pinned by vcpkg ${{ env.VCPKG_COMMIT_ID }} are gone from the
+        # msys2 mirrors (404) -> aom/ffmpeg/... fail in vcpkg_fixup_pkgconfig on Windows.
+        # Swap in the refreshed helper script (see .github/patches/vcpkg_acquire_msys.cmake).
+        shell: bash
+        run: |
+          cp -f .github/patches/vcpkg_acquire_msys.cmake "$VCPKG_ROOT/scripts/cmake/vcpkg_acquire_msys.cmake"
+          grep -c "z_vcpkg_acquire_msys_declare_package" "$VCPKG_ROOT/scripts/cmake/vcpkg_acquire_msys.cmake"
 
       - name: Install vcpkg dependencies
         env:
@@ -893,6 +911,8 @@ jobs:
         if: env.UPLOAD_ARTIFACT == 'true'
         run: |
           for name in rustdesk*??.dmg; do
+              # the unsigned dmg is already named rustdesk-<ver>-<arch>.dmg; only the signed one needs the suffix
+              case "$name" in *-${{ matrix.job.arch }}.dmg) continue ;; esac
               mv "$name" "${name%%.dmg}-${{ matrix.job.arch }}.dmg"
           done
 
