@@ -1519,7 +1519,41 @@ pub fn rustdesk_interval(i: Interval) -> ThrottledInterval {
     ThrottledInterval::new(i)
 }
 
+/// 自建服务器的信息写死在代码里，并且优先于本机配置。
+///
+/// 只改 hbb_common 的 RENDEZVOUS_SERVERS / RS_PUB_KEY 不够：选 ID 服务器时，本机配置文件
+/// （RustDesk2.toml）里的「ID 服务器」设置和「上次连接成功的服务器」缓存都排在写死的地址前面，
+/// 而卸载不会删除配置文件，重装新版本后仍会连旧服务器。
+/// 这里把服务器信息放进 OVERWRITE_SETTINGS：读取时它排在本机配置之前，用户改了也保存不下来；
+/// 同时隐藏界面上的「ID/中继服务器」设置。换服务器时只需改 hbb_common 的 RENDEZVOUS_SERVERS。
+fn apply_builtin_server_settings() {
+    let Some(host) = config::RENDEZVOUS_SERVERS.first() else {
+        return;
+    };
+    {
+        let mut overwrite = config::OVERWRITE_SETTINGS.write().unwrap();
+        overwrite.insert(
+            keys::OPTION_CUSTOM_RENDEZVOUS_SERVER.to_owned(),
+            host.to_string(),
+        );
+        overwrite.insert(
+            "relay-server".to_owned(),
+            format!("{}:{}", host, config::RELAY_PORT),
+        );
+        overwrite.insert(
+            keys::OPTION_API_SERVER.to_owned(),
+            format!("http://{}:{}", host, config::RENDEZVOUS_PORT - 2),
+        );
+        overwrite.insert(keys::OPTION_KEY.to_owned(), config::RS_PUB_KEY.to_owned());
+    }
+    config::BUILTIN_SETTINGS
+        .write()
+        .unwrap()
+        .insert(keys::OPTION_HIDE_SERVER_SETTINGS.to_owned(), "Y".to_owned());
+}
+
 pub fn load_custom_client() {
+    apply_builtin_server_settings();
     #[cfg(debug_assertions)]
     if let Ok(data) = std::fs::read_to_string("./custom.txt") {
         read_custom_client(data.trim());
@@ -1618,6 +1652,7 @@ pub fn get_dst_align_rgba() -> usize {
 }
 
 pub fn read_custom_client(config: &str) {
+    apply_builtin_server_settings();
     let Ok(data) = decode64(config) else {
         log::error!("Failed to decode custom client config");
         return;
