@@ -472,8 +472,6 @@ class _GeneralState extends State<_General> {
   }
 
   Widget other() {
-    final showAutoUpdate =
-        isWindows && bind.mainIsInstalled() && !bind.isCustomClient();
     final children = <Widget>[
       if (!isWeb && !bind.isIncomingOnly())
         _OptionCheckBox(context, 'Confirm before closing multiple tabs',
@@ -520,20 +518,7 @@ class _GeneralState extends State<_General> {
               isServer: false,
             ),
           ),
-        if (!isWeb && !bind.isCustomClient())
-          _OptionCheckBox(
-            context,
-            'Check for software update on startup',
-            kOptionEnableCheckUpdate,
-            isServer: false,
-          ),
-        if (showAutoUpdate)
-          _OptionCheckBox(
-            context,
-            'Auto update',
-            kOptionAllowAutoUpdate,
-            isServer: true,
-          ),
+        // 「启动时检查更新」「自动更新」两个开关已去掉：官方版本检查在 common.rs 里关闭了。
         if (isWindows && !bind.isOutgoingOnly())
           _OptionCheckBox(
             context,

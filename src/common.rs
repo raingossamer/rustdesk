@@ -878,8 +878,15 @@ pub fn is_modifier(evt: &KeyEvent) -> bool {
     }
 }
 
+/// 不检查官方新版本。
+/// 官方安装包里没有写死的自建服务器，装上就会连回官方服务器，所以这里统一关掉：
+/// - 启动时不再检查，主页不再弹「RustDesk 版本更新」卡片；
+/// - Windows 服务的自动更新拿不到新版本地址，不会把客户端换成官方版；
+/// - 不再请求官方的版本接口。
+const DISABLE_OFFICIAL_UPDATE: bool = true;
+
 pub fn check_software_update() {
-    if is_custom_client() {
+    if DISABLE_OFFICIAL_UPDATE || is_custom_client() {
         return;
     }
     let opt = LocalConfig::get_option(keys::OPTION_ENABLE_CHECK_UPDATE);
@@ -890,6 +897,10 @@ pub fn check_software_update() {
 
 #[tokio::main(flavor = "current_thread")]
 pub async fn do_check_software_update() -> hbb_common::ResultType<()> {
+    if DISABLE_OFFICIAL_UPDATE {
+        *SOFTWARE_UPDATE_URL.lock().unwrap() = "".to_string();
+        return Ok(());
+    }
     let (request, url) =
         hbb_common::version_check_request(hbb_common::VER_TYPE_RUSTDESK_CLIENT.to_string());
     let latest_release_response = create_http_client_async()
